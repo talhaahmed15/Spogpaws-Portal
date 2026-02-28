@@ -11,7 +11,9 @@ import '../../domain/usecases/update_adoption_request_status_use_case.dart';
 import '../controllers/adoption_requests_controller.dart';
 
 class AdoptionRequestsPanel extends StatefulWidget {
-  const AdoptionRequestsPanel({super.key});
+  const AdoptionRequestsPanel({super.key, this.initialRequestId});
+
+  final String? initialRequestId;
 
   @override
   State<AdoptionRequestsPanel> createState() => _AdoptionRequestsPanelState();
@@ -20,6 +22,7 @@ class AdoptionRequestsPanel extends StatefulWidget {
 class _AdoptionRequestsPanelState extends State<AdoptionRequestsPanel> {
   late final AdoptionRequestsController _controller;
   final _searchController = TextEditingController();
+  bool _hasOpenedInitialRequest = false;
 
   @override
   void initState() {
@@ -51,10 +54,27 @@ class _AdoptionRequestsPanelState extends State<AdoptionRequestsPanel> {
 
   Future<void> _load() async {
     await _controller.load();
+    if (!_hasOpenedInitialRequest &&
+        widget.initialRequestId != null &&
+        widget.initialRequestId!.trim().isNotEmpty) {
+      _hasOpenedInitialRequest = true;
+      await _controller.openDetail(widget.initialRequestId!.trim());
+    }
     if (!mounted) {
       return;
     }
     setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant AdoptionRequestsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final previous = oldWidget.initialRequestId?.trim() ?? '';
+    final next = widget.initialRequestId?.trim() ?? '';
+    if (next.isNotEmpty && next != previous) {
+      _hasOpenedInitialRequest = true;
+      _openDetail(next);
+    }
   }
 
   Future<void> _setFilter(String status) async {
@@ -335,6 +355,10 @@ class _AdoptionRequestDetailView extends StatelessWidget {
     if (request == null) {
       return const _EmptyState(label: 'Request not available.');
     }
+    final normalizedStatus = request.status.trim().toLowerCase();
+    final isAccepted = normalizedStatus == 'approved';
+    final isRejected =
+        normalizedStatus == 'closed' || normalizedStatus == 'rejected';
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -386,16 +410,8 @@ class _AdoptionRequestDetailView extends StatelessWidget {
                       textColor: AdminColors.black,
                       icon: Icons.check_circle_rounded,
                       iconColor: const Color(0xFF0B9364),
+                      selected: isAccepted,
                       onTap: () => onUpdateStatus('approved'),
-                    ),
-                    _StatusActionButton(
-                      text: 'Under Review',
-                      color: const Color(0xFFF1F5FA),
-                      textColor: const Color(0xFF2E3E58),
-                      icon: Icons.info_rounded,
-                      iconColor: const Color(0xFF2C63D6),
-                      borderColor: AdminColors.divider,
-                      onTap: () => onUpdateStatus('under_review'),
                     ),
                     _StatusActionButton(
                       text: 'Reject',
@@ -403,8 +419,28 @@ class _AdoptionRequestDetailView extends StatelessWidget {
                       textColor: const Color(0xFFD43E57),
                       icon: Icons.cancel_rounded,
                       iconColor: const Color(0xFFD43E57),
+                      selected: isRejected,
                       borderColor: const Color(0xFFF4BCC6),
                       onTap: () => onUpdateStatus('closed'),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F7FB),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AdminColors.divider),
+                      ),
+                      child: Text(
+                        'Current: ${_prettyStatus(request.status)}',
+                        style: const TextStyle(
+                          fontFamily: 'Manrope',
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF4F5E77),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -413,6 +449,49 @@ class _AdoptionRequestDetailView extends StatelessWidget {
               if (compact)
                 Column(
                   children: [
+                    _DetailCard(
+                      title: 'Pet Details',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _KeyValue(label: 'Pet Name', value: request.petName),
+                          _KeyValue(
+                            label: 'Type',
+                            value: _prettyStatus(request.petType),
+                          ),
+                          _KeyValue(label: 'Breed', value: request.breed),
+                          _KeyValue(label: 'City', value: request.city),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _DetailCard(
+                      title: 'Request Metadata',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _KeyValue(label: 'Request ID', value: request.id),
+                          _KeyValue(
+                            label: 'Submitted',
+                            value: _formatDate(request.createdAt),
+                          ),
+                          _KeyValue(
+                            label: 'Current Status',
+                            value: _prettyStatus(request.status),
+                          ),
+                          _KeyValue(
+                            label: 'Reports',
+                            value: '${request.reportCount}',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _DetailCard(
+                      title: 'Attached Images',
+                      child: _AttachedImagesSection(urls: request.photoUrls),
+                    ),
+                    const SizedBox(height: 14),
                     _DetailCard(
                       title: 'Applicant Information',
                       child: Column(
@@ -462,73 +541,8 @@ class _AdoptionRequestDetailView extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF4F7FB),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AdminColors.divider),
-                            ),
-                            child: const Text(
-                              'Only backend-supported fields are shown for this request detail.',
-                              style: TextStyle(
-                                fontFamily: 'Manrope',
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                                color: Color(0xFF74839B),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    _DetailCard(
-                      title: 'Pet Details',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _KeyValue(label: 'Pet Name', value: request.petName),
-                          _KeyValue(
-                            label: 'Type',
-                            value: _prettyStatus(request.petType),
-                          ),
-                          _KeyValue(label: 'Breed', value: request.breed),
-                          _KeyValue(label: 'City', value: request.city),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _DetailCard(
-                      title: 'Request Metadata',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _KeyValue(label: 'Request ID', value: request.id),
-                          _KeyValue(
-                            label: 'Submitted',
-                            value: _formatDate(request.createdAt),
-                          ),
-                          _KeyValue(
-                            label: 'Current Status',
-                            value: _prettyStatus(request.status),
-                          ),
-                          _KeyValue(
-                            label: 'Reports',
-                            value: '${request.reportCount}',
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _DetailCard(
-                      title: 'Attached Images',
-                      child: _AttachedImagesSection(urls: request.photoUrls),
                     ),
                   ],
                 )
@@ -582,94 +596,76 @@ class _AdoptionRequestDetailView extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 14),
-                          _DetailCard(
-                            title: 'Attached Images',
-                            child: _AttachedImagesSection(
-                              urls: request.photoUrls,
-                            ),
-                          ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       flex: 2,
-                      child: _DetailCard(
-                        title: 'Applicant Information',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      child: Column(
+                        children: [
+                          _DetailCard(
+                            title: 'Attached Images',
+                            child: _AttachedImagesSection(
+                              urls: request.photoUrls,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          _DetailCard(
+                            title: 'Applicant Information',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                CircleAvatar(
-                                  radius: 22,
-                                  backgroundColor: const Color(0xFFE6FFF9),
-                                  child: Text(
-                                    _initials(request.applicantName),
-                                    style: const TextStyle(
-                                      fontFamily: 'Manrope',
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF0F7A67),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        request.applicantName,
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 22,
+                                      backgroundColor: const Color(0xFFE6FFF9),
+                                      child: Text(
+                                        _initials(request.applicantName),
                                         style: const TextStyle(
                                           fontFamily: 'Manrope',
                                           fontWeight: FontWeight.w800,
-                                          fontSize: 18,
-                                          color: AdminColors.black,
+                                          color: Color(0xFF0F7A67),
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        request.applicantEmail.isEmpty
-                                            ? 'Email not available'
-                                            : request.applicantEmail,
-                                        style: const TextStyle(
-                                          fontFamily: 'Manrope',
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
-                                          color: Color(0xFF6B7A93),
-                                        ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            request.applicantName,
+                                            style: const TextStyle(
+                                              fontFamily: 'Manrope',
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 18,
+                                              color: AdminColors.black,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            request.applicantEmail.isEmpty
+                                                ? 'Email not available'
+                                                : request.applicantEmail,
+                                            style: const TextStyle(
+                                              fontFamily: 'Manrope',
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 16,
+                                              color: Color(0xFF6B7A93),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF4F7FB),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AdminColors.divider),
-                              ),
-                              child: const Text(
-                                'Only backend-supported fields are shown for this request detail.',
-                                style: TextStyle(
-                                  fontFamily: 'Manrope',
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: Color(0xFF74839B),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1373,25 +1369,72 @@ class _AttachedImagesSection extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final url = urls[index];
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: 160,
-              decoration: BoxDecoration(
-                border: Border.all(color: AdminColors.divider),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Image.network(
-                url,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Icon(
-                      Icons.broken_image_rounded,
-                      color: Color(0xFF91A0B5),
+          return GestureDetector(
+            onTap: () {
+              showDialog<void>(
+                context: context,
+                builder: (context) {
+                  return Dialog(
+                    child: Stack(
+                      children: [
+                        InteractiveViewer(
+                          minScale: 1,
+                          maxScale: 4,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              url,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const SizedBox(
+                                  width: 520,
+                                  height: 380,
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.broken_image_rounded,
+                                      size: 46,
+                                      color: Color(0xFF91A0B5),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 },
+              );
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 160,
+                decoration: BoxDecoration(
+                  border: Border.all(color: AdminColors.divider),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Center(
+                      child: Icon(
+                        Icons.broken_image_rounded,
+                        color: Color(0xFF91A0B5),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           );
@@ -1409,6 +1452,7 @@ class _StatusActionButton extends StatelessWidget {
     required this.onTap,
     required this.icon,
     required this.iconColor,
+    this.selected = false,
     this.borderColor,
   });
 
@@ -1417,38 +1461,52 @@ class _StatusActionButton extends StatelessWidget {
   final Color textColor;
   final IconData icon;
   final Color iconColor;
+  final bool selected;
   final Color? borderColor;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: borderColor ?? color),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: iconColor),
-            const SizedBox(width: 8),
-            Text(
-              text,
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontWeight: FontWeight.w800,
-                fontSize: 15,
-                color: textColor,
-              ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Ink(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: selected ? color : color.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected
+                  ? (borderColor ?? color)
+                  : (borderColor ?? color).withValues(alpha: 0.45),
+              width: selected ? 1.5 : 1,
             ),
-          ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: selected ? iconColor : iconColor.withValues(alpha: 0.55),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                text,
+                style: TextStyle(
+                  fontFamily: 'Manrope',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: selected
+                      ? textColor
+                      : textColor.withValues(alpha: 0.55),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

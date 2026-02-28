@@ -24,6 +24,7 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   int _index = 0;
   final _searchController = TextEditingController();
+  String? _adoptionInitialRequestId;
 
   @override
   void dispose() {
@@ -34,9 +35,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      const DashboardOverviewPanel(),
+      DashboardOverviewPanel(
+        onOpenRequest: (requestId) {
+          setState(() {
+            _adoptionInitialRequestId = requestId;
+            _index = 2;
+          });
+        },
+      ),
       const UsersManagementPanel(),
-      const AdoptionModerationPanel(),
+      AdoptionModerationPanel(initialRequestId: _adoptionInitialRequestId),
       const ReportsPanel(),
       const SuggestionsPanel(),
     ];
@@ -63,7 +71,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
           _AdminSidebar(
             profile: widget.profile,
             selectedIndex: _index,
-            onSelected: (index) => setState(() => _index = index),
+            onSelected: (index) => setState(() {
+              _index = index;
+              if (index != 2) {
+                _adoptionInitialRequestId = null;
+              }
+            }),
           ),
           Expanded(
             child: Column(
@@ -521,7 +534,9 @@ class _SpogSearchFieldState extends State<SpogSearchField> {
 }
 
 class DashboardOverviewPanel extends StatefulWidget {
-  const DashboardOverviewPanel({super.key});
+  const DashboardOverviewPanel({super.key, required this.onOpenRequest});
+
+  final ValueChanged<String> onOpenRequest;
 
   @override
   State<DashboardOverviewPanel> createState() => _DashboardOverviewPanelState();
@@ -705,7 +720,10 @@ class _DashboardOverviewPanelState extends State<DashboardOverviewPanel> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _RecentRequestsCard(items: data.recentRequests),
+                _RecentRequestsCard(
+                  items: data.recentRequests,
+                  onViewDetails: (post) => widget.onOpenRequest(post.id),
+                ),
               ],
             ),
           ),
@@ -1148,9 +1166,10 @@ class _RecentActivityCard extends StatelessWidget {
 }
 
 class _RecentRequestsCard extends StatelessWidget {
-  const _RecentRequestsCard({required this.items});
+  const _RecentRequestsCard({required this.items, required this.onViewDetails});
 
   final List<AdminAdoption> items;
+  final ValueChanged<AdminAdoption> onViewDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -1252,14 +1271,27 @@ class _RecentRequestsCard extends StatelessWidget {
                   ),
                   Expanded(
                     flex: 2,
-                    child: TextButton(
-                      onPressed: () {},
-                      child: const Text(
-                        'VIEW DETAILS',
-                        style: TextStyle(
-                          fontFamily: 'Manrope',
-                          fontWeight: FontWeight.w800,
-                          color: AdminColors.accent,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        width: 120,
+                        child: TextButton(
+                          onPressed: () => onViewDetails(post),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'VIEW DETAILS',
+                            style: TextStyle(
+                              fontFamily: 'Manrope',
+                              fontWeight: FontWeight.w800,
+                              color: AdminColors.accent,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -2055,10 +2087,13 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class AdoptionModerationPanel extends StatelessWidget {
-  const AdoptionModerationPanel({super.key});
+  const AdoptionModerationPanel({super.key, this.initialRequestId});
+
+  final String? initialRequestId;
 
   @override
-  Widget build(BuildContext context) => const AdoptionRequestsPanel();
+  Widget build(BuildContext context) =>
+      AdoptionRequestsPanel(initialRequestId: initialRequestId);
 }
 
 class ReportsPanel extends StatefulWidget {
